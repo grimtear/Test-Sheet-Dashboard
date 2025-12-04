@@ -22,7 +22,7 @@ export const sessions = sqliteTable('sessions', {
 
 export const userLogins = sqliteTable('user_logins', {
   id: text('id').primaryKey().default(sql`(lower(hex(randomblob(16))))`),
-  userId: text('user_id').notNull().references(() => users.id),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'cascade' }),
   email: text('email').notNull(),
   firstName: text('first_name'),
   loginTime: integer('login_time', { mode: 'timestamp' }).default(sql`(unixepoch())`),
@@ -33,7 +33,7 @@ export const userLogins = sqliteTable('user_logins', {
 
 export const testSheets = sqliteTable('test_sheets', {
   id: text('id').primaryKey().default(sql`(lower(hex(randomblob(16))))`),
-  userId: text('user_id').notNull().references(() => users.id),
+  userId: text('user_id').notNull().references(() => users.id, { onDelete: 'restrict' }),
   techReference: text('tech_reference').notNull().unique(),
   adminReference: text('admin_reference').notNull(),
   formType: text('form_type').notNull().default('Test Sheet'),
