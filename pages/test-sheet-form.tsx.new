@@ -1,0 +1,169 @@
+import { useEffect, useRef, useState } from "react";
+import { format } from "date-fns";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { CalendarDays, Check, ChevronsUpDown } from "lucide-react";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { useAuth } from "@/hooks/useAuth";
+import { useLocation } from "wouter";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+
+// Your existing constants and types here...
+
+export default function TestSheetForm() {
+  // Your existing state and handlers here...
+
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-blue-50 p-6">
+      <div className="max-w-5xl mx-auto">
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center gap-4">
+            <img src="/NAE logo.jpg" alt="NAE Logo" className="w-16 h-16 object-contain" />
+            <div>
+              <h1 className="text-4xl font-bold text-blue-900">Test Sheet</h1>
+              <p className="text-blue-600 text-lg">Complete test sheet for vehicle technology systems</p>
+            </div>
+          </div>
+          <Badge variant="outline" className="mt-4">
+            <CalendarDays className="w-4 h-4 mr-2" />
+            {format(new Date(), "dd/MM/yyyy")}
+          </Badge>
+        </div>
+        
+        <form onSubmit={handleSubmit}>
+          <Card className="shadow-2xl border-0 bg-white/80 backdrop-blur" id="test-sheet-print">
+            <CardHeader className="bg-gradient-to-r from-blue-50 to-white text-slate-800 rounded-t-lg border-b">
+              <div className="flex items-center justify-center gap-4">
+                <img src="/NAE logo.jpg" alt="NAE Logo" className="w-12 h-12 object-contain" />
+                <CardTitle className="text-3xl font-bold text-center">Test Sheet</CardTitle>
+              </div>
+            </CardHeader>
+            
+            <CardContent className="p-6 space-y-8">
+              {/* Form fields here */}
+              
+              {/* Actions */}
+              <div className="flex flex-wrap justify-between items-center gap-3 pt-6" data-print-exclude>
+                <img src="/NAE logo.jpg" alt="NAE Logo" className="w-12 h-12 object-contain" />
+                <div className="flex flex-wrap justify-end gap-3">
+                  <Button type="button" variant="outline" onClick={() => setLocation('/review')}>
+                    Review
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    disabled={isSubmitting}
+                    onClick={async () => {
+                      const check = validateRequiredForSave();
+                      if (!check.ok) {
+                        alert(`Please complete required fields before saving:\n- ${check.missing.join("\n- ")}`);
+                        return;
+                      }
+                      if (!formData.adminReference) generateAdminRef();
+                      
+                      // Save to local storage and Google Sheets...
+                      try {
+                        const draftLocal = { ...formData, isDraft: true };
+                        localStorage.setItem("nae-tech-form-draft", JSON.stringify(draftLocal));
+                        console.log("Draft saved to local storage:", draftLocal);
+                      } catch (e) {
+                        console.error("Failed to save draft to local storage:", e);
+                        alert("An error occurred while saving the draft locally.");
+                      }
+
+                      // Save to Google Sheets...
+                      try {
+                        let signatureData: string | undefined;
+                        if (canvasRef.current) {
+                          try { signatureData = canvasRef.current.toDataURL("image/png"); } catch { }
+                        }
+                        const payload = {
+                          ...formData,
+                          isDraft: true,
+                          startTime: formData.startTime ? new Date(formData.startTime).getTime() : Date.now(),
+                          endTime: formData.endTime ? new Date(formData.endTime).getTime() : undefined,
+                          administratorSignature: signatureData,
+                        };
+                        const response = await fetch("/api/test-sheets", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          credentials: "include",
+                          body: JSON.stringify(payload),
+                        });
+                        if (!response.ok) {
+                          const errorText = await response.text();
+                          console.error("Google Sheets append failed:", errorText);
+                          alert("Failed to save to Google Sheets. Please try again later.");
+                        } else {
+                          console.log("Draft appended to Google Sheets successfully:", payload);
+                        }
+                      } catch (e) {
+                        console.warn("Draft append to Google Sheets failed:", e);
+                        alert("An error occurred while saving to Google Sheets.");
+                      }
+
+                      // Save PDF copy...
+                      try {
+                        const fileName = `${formData.adminReference || "draft"}.pdf`;
+                        const dataUrl = await downloadPDF(fileName);
+                        const response = await fetch('/api/save-pdf', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          credentials: 'include',
+                          body: JSON.stringify({ filename: fileName, dataUrl }),
+                        });
+                        if (!response.ok) {
+                          const errorText = await response.text();
+                          console.error("PDF save failed:", errorText);
+                          alert("Failed to save PDF to the server. Please try again later.");
+                        } else {
+                          console.log("PDF saved to server successfully:", fileName);
+                        }
+                      } catch (e) {
+                        console.warn("PDF save failed:", e);
+                        alert("An error occurred while saving the PDF.");
+                      }
+                    }}
+                  >
+                    Save
+                  </Button>
+                  <Button type="submit" disabled={isSubmitting} className="bg-emerald-500 hover:bg-emerald-600 text-white px-8">
+                    {isSubmitting ? "Submitting..." : "Submit"}
+                  </Button>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </form>
+      </div>
+
+      {showPopup && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center"
+          onClick={() => setShowPopup(false)}
+        >
+          <div
+            className="bg-white p-6 rounded shadow-lg"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p>NAE Technology Form submitted successfully!</p>
+            <button
+              className="mt-4 bg-blue-500 text-white px-4 py-2 rounded"
+              onClick={() => setShowPopup(false)}
+            >
+              OK
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
