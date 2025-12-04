@@ -1,6 +1,6 @@
 {
   "include": [
-    "client/src/**/*",
+    "**/*",
     "shared/**/*",
     "server/**/*"
   ],
@@ -35,7 +35,7 @@
     ],
     "paths": {
       "@/*": [
-        "./client/src/*"
+        "./*"
       ],
       "@shared/*": [
         "./shared/*"
