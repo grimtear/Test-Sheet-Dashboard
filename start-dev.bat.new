@@ -1,0 +1,73 @@
+@echo off
+setlocal enabledelayedexpansion
+
+REM TestSheet Development Server Launcher
+REM This script ensures both client and server start correctly
+
+echo ========================================
+echo TestSheet Development Environment
+echo ========================================
+
+REM Get the directory where this batch file is located and go there
+cd /d "%~dp0"
+echo Current directory: %CD%
+
+REM Install dependencies if needed
+if not exist "node_modules\" (
+    echo Installing dependencies...
+    call npm install
+)
+
+REM Kill any existing node processes first
+taskkill /F /IM node.exe >nul 2>&1
+
+REM Set environment variables
+set NODE_ENV=development
+set SESSION_SECRET=local-dev-secret-key-change-in-production
+set VITE_API_URL=http://192.168.1.194:5002
+
+REM Create a new command window for the client
+echo Starting Vite development server...
+start "TestSheet Client - Vite Dev Server" cmd /k "npm run dev:client"
+
+REM Wait a moment for the client to start
+timeout /t 3 /nobreak >nul
+
+REM Start the server with error handling
+echo Starting API server...
+echo ========================================
+
+:retry_server
+call npm run dev:server
+if !errorlevel! neq 0 (
+    echo.
+    echo ========================================
+    echo Server crashed or failed to start
+    echo Error code: !errorlevel!
+    echo ========================================
+    echo.
+    echo 1. Retry server
+    echo 2. View logs
+    echo 3. Exit
+    choice /C 123 /M "Choose an option"
+    if !errorlevel!==1 (
+        echo.
+        echo Retrying server startup...
+        goto retry_server
+    )
+    if !errorlevel!==2 (
+        if exist "npm-debug.log" (
+            type "npm-debug.log"
+        ) else (
+            echo No debug log found
+        )
+        pause
+        goto retry_server
+    )
+)
+
+echo.
+echo ========================================
+echo Development environment stopped
+echo ========================================
+pause
